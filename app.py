@@ -1,58 +1,37 @@
 from flask import Flask, request, jsonify
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from gradio_client import Client
 import os
 
-# Initialize the Flask app
 app = Flask(__name__)
 
-# --- LOAD MODEL & TOKENIZER ---
-MODEL_NAME = "tabularisai/multilingual-sentiment-analysis"
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+# Load your Gradio Space as a client
+client = Client("zeeshanali66/sentiment-analysis")
 
-# --- HELPER FUNCTION ---
-def analyze_sentiment(user_input):
-    inputs = tokenizer(user_input, return_tensors="pt", truncation=True, padding=True, max_length=512)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    sentiment_map = {
-        0: "Very Negative",
-        1: "Negative",
-        2: "Neutral",
-        3: "Positive",
-        4: "Very Positive"
-    }
-    prediction = torch.argmax(probabilities, dim=-1).item()
-    return sentiment_map.get(prediction, "Unknown")
-
-# --- API ROUTES ---
 @app.route("/")
 def home():
     return jsonify({
         "status": "online",
-        "model": MODEL_NAME,
-        "message": "API is ready to receive requests at /detect_emotion"
+        "message": "Send POST to /predict with JSON {\"text\": \"your message\"}"
     })
 
-@app.route('/detect_emotion', methods=['POST'])
-def detect_emotion_route():
+@app.route("/predict", methods=["POST"])
+def predict():
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
 
     data = request.get_json()
-    user_input = data.get('text')
+    user_input = data.get("text")
 
     if not user_input:
-        return jsonify({"error": "Missing 'text' field in request body"}), 400
+        return jsonify({"error": "Missing 'text' field in JSON"}), 400
 
     try:
-        emotion = analyze_sentiment(user_input)
-        return jsonify({"emotion": emotion})
+        # Call the Gradio Space
+        result = client.predict(user_input=user_input, api_name="/predict")
+        return jsonify({"sentiment": result}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 6000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
