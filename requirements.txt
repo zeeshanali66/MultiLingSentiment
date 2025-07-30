@@ -23,3 +23,4 @@ uvicorn
 gunicorn
 vaderSentiment
 flask-cors
+torch
